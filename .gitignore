@@ -5,6 +5,7 @@
 *.elf
 *.md~
 *~
+filesystem
 
 # Precompiled Headers
 *.gch
