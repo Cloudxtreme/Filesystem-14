@@ -6,10 +6,10 @@
 #include <errno.h>
 #include <fcntl.h>
 
-static const char *hello_str = "Hello World!\n";
-static const char *hello_path = "/hello";
+static const char *hello_str = "Lithium!\n";
+static const char *hello_path = "/Lithium Inc.";
 
-static int hello_getattr(const char *path, struct stat *stbuf)
+static int lithiumdenis_getattr(const char *path, struct stat *stbuf)
 {
 	int res = 0;
 
@@ -27,7 +27,7 @@ static int hello_getattr(const char *path, struct stat *stbuf)
 	return res;
 }
 
-static int hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+static int lithiumdenis_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			 off_t offset, struct fuse_file_info *fi)
 {
 	(void) offset;
@@ -43,7 +43,7 @@ static int hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	return 0;
 }
 
-static int hello_open(const char *path, struct fuse_file_info *fi)
+static int lithiumdenis_open(const char *path, struct fuse_file_info *fi)
 {
 	if (strcmp(path, hello_path) != 0)
 		return -ENOENT;
@@ -54,7 +54,7 @@ static int hello_open(const char *path, struct fuse_file_info *fi)
 	return 0;
 }
 
-static int hello_read(const char *path, char *buf, size_t size, off_t offset,
+static int lithiumdenis_read(const char *path, char *buf, size_t size, off_t offset,
 		      struct fuse_file_info *fi)
 {
 	size_t len;
@@ -73,14 +73,14 @@ static int hello_read(const char *path, char *buf, size_t size, off_t offset,
 	return size;
 }
 
-static struct fuse_operations hello_oper = {
-	.getattr	= hello_getattr,
-	.readdir	= hello_readdir,
-	.open		= hello_open,
-	.read		= hello_read,
+static struct fuse_operations lithiumdenis_operations = {
+	.getattr	= lithiumdenis_getattr,
+	.readdir	= lithiumdenis_readdir,
+	.open		= lithiumdenis_open,
+	.read		= lithiumdenis_read,
 };
 
 int main(int argc, char *argv[])
 {
-	return fuse_main(argc, argv, &hello_oper, NULL);
+	return fuse_main(argc, argv, &lithiumdenis_operations, NULL);
 }
