@@ -6,6 +6,7 @@
 *.md~
 *~
 filesystem
+/MyBinaryFile/bigbinary
 
 # Precompiled Headers
 *.gch
