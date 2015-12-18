@@ -147,12 +147,12 @@ inode FindINode(char* path)
     }
     else
     {
-	    if (strcmp(path, "/qq") == 0)
+	if (strcmp(path, "/qq") == 0)
     	{
-    		inode n = ReadiNode(fileSystem.istart + 96);
+    		inode n = ReadiNode(fileSystem.istart + fileSystem.isize);
     		if (n->type == 0) 
     			return NULL;
-       		return ReadiNode(fileSystem.istart + 96);
+       		return ReadiNode(fileSystem.istart + fileSystem.isize);
     	}
         return NULL;
     }
