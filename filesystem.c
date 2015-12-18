@@ -34,12 +34,19 @@ struct str_FileSystem
 	int isize;
 }fileSystem;
 
+int KnowSizeFile()
+{
+	FILE* fs = fopen(binary_path, "rb+");
+	fseek(fs, 0, SEEK_END);   
+	int size = ftell(fs);
+	return size; 	
+}
 
 void FillBinaryFile() 
 {
         //Заполняем файл нулями
         FILE* f = fopen(binary_path, "wt");
-	for (int i = 0; i < 1000000; i++)
+	for (int i = 0; i < 10000000; i++)
 	{
 		fprintf(f, "%d\n", 0);
 		fprintf(f, "\n");
@@ -47,9 +54,8 @@ void FillBinaryFile()
 	fclose(f);
         
         //Форматируем для работы с iNode
-	FILE* fs = fopen(binary_path, "rb+");
-	fseek(fs, 0, SEEK_END);   
-	int size = ftell(fs); 
+	int size = KnowSizeFile();
+	FILE* fs = fopen(binary_path, "wb+"); 
 	fseek(fs, 0, SEEK_SET);
 	fileSystem.isize = sizeof(struct str_iNode);
 	fileSystem.istart = sizeof(struct str_FileSystem);
@@ -68,7 +74,6 @@ void FillBinaryFile()
 	{
 		in->folder.nodes[i] = NULL;
 	}
-
 	fseek(fs, fileSystem.istart, SEEK_SET);
 	fwrite(in, sizeof(struct str_iNode), 1, fs);
 
@@ -91,9 +96,70 @@ void PrintiNode(inode n)
     {
         for (int i = 0; i < 10; i++) 
         {
+        	if (n->folder.nodes[i] != NULL)
+        		printf("%s\n", n->folder.name[i]);
             printf("%d, %d\n", i, n->folder.nodes[i]);
         }
     }
+}
+
+void AddChildiNode(inode parent, int parentIndex, inode child, const char* nameChild)
+{
+	int pos = FindFreeiNode();
+	FILE *fs = fopen(binary_path, "wb+");	
+	if (pos < 0 || parent->type != 1)
+	{
+		return;
+	}
+	int i = 0;
+	while (i < 10 && parent->folder.nodes[i] != NULL)
+	{
+		i++;
+	}
+	if (i == 10)
+	{
+		return;
+	}
+	parent->folder.nodes[i] = pos;
+	CopyName(parent->folder.name[i], nameChild);	
+	fseek(fs, parentIndex, SEEK_SET);
+	fwrite(parent, sizeof(struct str_iNode), 1, fs);
+	fseek(fs, pos, SEEK_SET);
+	fwrite(child, sizeof(struct str_iNode), 1, fs);
+}
+
+void CopyName(char* dest, char* source) 
+{
+    int len = strlen(source);
+    len = len > 3 ? 3 : len;
+    int i = 0;
+    for (i; i < len; i++)
+    {
+        dest[i] = source[i];
+    }
+    dest[i] = NULL;
+}
+
+int FindFreeiNode()
+{
+	FILE *fs = fopen(binary_path, "rb+");
+	inode n = malloc(sizeof(struct str_iNode));	
+	int pos = fileSystem.istart;
+	do
+	{
+		if (pos >= fileSystem.iend - fileSystem.isize)
+		{
+			return -1;
+		}
+		fseek(fs, pos, SEEK_SET);
+		fread(n, sizeof(struct str_iNode), 1, fs);
+		if (n->type == 0)
+		{
+			return pos;
+		}
+		pos += fileSystem.isize;
+	}while (pos < fileSystem.iend);
+	return pos;
 }
 
 /*static int lithiumdenis_getattr(const char *path, struct stat *stbuf)
@@ -168,15 +234,15 @@ static struct fuse_operations lithiumdenis_operations = {
 };*/
 
 
-
-
-
 int main(int argc, char *argv[])
 {
         FillBinaryFile();
 
-	inode n = ReadiNode(12);
-	PrintiNode(n);
+	inode parent = ReadiNode(12);
+	inode child = malloc(sizeof(struct str_iNode));
+	child->type = 1;
+	AddChildiNode(parent, 12, child, "child");
+	PrintiNode(parent);
 	return 0;
 	//return fuse_main(argc, argv, &lithiumdenis_operations, NULL);
 }
