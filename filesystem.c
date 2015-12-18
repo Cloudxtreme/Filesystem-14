@@ -74,10 +74,10 @@ static int lithiumdenis_read(const char *path, char *buf, size_t size, off_t off
 }
 
 static struct fuse_operations lithiumdenis_operations = {
-	.getattr	= lithiumdenis_getattr,
-	.readdir	= lithiumdenis_readdir,
-	.open		= lithiumdenis_open,
-	.read		= lithiumdenis_read,
+	.getattr  = lithiumdenis_getattr,
+	.readdir  = lithiumdenis_readdir,
+	.open     = lithiumdenis_open,
+	.read     = lithiumdenis_read,
 };
 
 int main(int argc, char *argv[])
