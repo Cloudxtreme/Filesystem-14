@@ -11,7 +11,6 @@
 #include <errno.h>
 #include <fcntl.h>
 
-//static const char *hello_str = "Lithium!\n";
 static const char *binary_path = "/home/lithiumdenis/CSF/Filesystem/MyBinaryFile/bigbinary";
 
 typedef struct str_iFolder 
@@ -188,8 +187,7 @@ void LoadFileSystem()
     fclose(fs);
 }
 
-
-
+//Получение атрибутов файла
 static int lithiumdenis_getattr(const char *path, struct stat *stbuf)
 {
     inode n = FindINode(path);
@@ -206,6 +204,7 @@ static int lithiumdenis_getattr(const char *path, struct stat *stbuf)
         return -ENOENT;
 }
 
+//Получение содержимого папки
 static int lithiumdenis_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			 off_t offset, struct fuse_file_info *fi)
 {
@@ -230,6 +229,7 @@ static int lithiumdenis_readdir(const char *path, void *buf, fuse_fill_dir_t fil
     }
 }
 
+//Создание папки
 static int lithiumdenis_mkdir(const char* path, mode_t mode) 
 {
 	inode parent = ReadiNode(fileSystem.istart);
@@ -244,10 +244,16 @@ static int lithiumdenis_mkdir(const char* path, mode_t mode)
 	return 0;
 }
 
+//Изменение размера файла
+static int lithiumdenis_truncate(const char * path, off_t offset) {
+	return 0;
+}
+
 static struct fuse_operations lithiumdenis_operations = {
 	.getattr  = lithiumdenis_getattr,
 	.readdir  = lithiumdenis_readdir,
-	.mkdir = lithiumdenis_mkdir
+	.mkdir    = lithiumdenis_mkdir,
+        .truncate = lithiumdenis_truncate
 };
 
 
