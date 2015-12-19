@@ -1,8 +1,14 @@
 #define FUSE_USE_VERSION 26
+#define _FILE_OFFSET_BITS 64
+#define NLENGTH 512
+#define FREEBLOCK 0
+#define FOLDERBLOCK 1
+#define FILEBLOCK 2
 
-#define DEBUG 
 #ifdef DEBUG
-	#define TRACE printf("%d\n", __LINE__);
+#define TRACE printf("[DEBUG] FILE:%s LINE:%d\n", __FILE__, __LINE__);
+#else
+#define TRACE
 #endif
 
 #include <fuse.h>
@@ -10,184 +16,76 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <unistd.h>
+#include <stdlib.h>
 
 static const char *binary_path = "/home/lithiumdenis/CSF/Filesystem/MyBinaryFile/bigbinary";
+const int blockSize = 4096;
+int fileDest = -1;
+const int isRootBlock = 0;
 
-typedef struct str_iFolder 
-{ 
-	char name[10][5];
-	int nodes[10];
-}iFolder;
+typedef struct stat stat_t;
+typedef struct node inode_t;
 
-typedef struct str_iNode *inode;
-struct str_iNode
+struct node
 {
-	int type;
-	iFolder folder;
+    char name[NLENGTH];
+    char data[0];
+    char status;
+    stat_t stat;
 };
 
-struct str_FileSystem 
+void *blockCreator()
 {
-	int istart;
-	int iend;
-	int isize;
-}fileSystem;
-
-int KnowSizeFile()
-{
-	FILE* fs = fopen(binary_path, "rb+");
-	fseek(fs, 0, SEEK_END);   
-	int size = ftell(fs);
-	return size; 	
+    return calloc(blockSize, sizeof(char));
 }
 
-void FillBinaryFile() 
+int write_block(int number, void *block)
 {
-        //Заполняем файл нулями
-        FILE* f = fopen(binary_path, "wt");
-	for (int i = 0; i < 10000000; i++)
-	{
-		fprintf(f, "%d\n", 0);
-		fprintf(f, "\n");
-	}
-	fclose(f);
-        
-        //Форматируем для работы с iNode
-	int size = KnowSizeFile();
-	FILE* fs = fopen(binary_path, "rb+"); 
-	fseek(fs, 0, SEEK_SET);
-	fileSystem.isize = sizeof(struct str_iNode);
-	fileSystem.istart = sizeof(struct str_FileSystem);
-	fileSystem.iend = size;
-	fwrite(&fileSystem, sizeof(struct str_FileSystem), 1, fs);
-	for (int i = fileSystem.istart; i < fileSystem.iend - fileSystem.isize; i += fileSystem.isize) 
-	{
-		fseek(fs, i, SEEK_SET);  
-		int x = 0;
-		fwrite(&x, 4, 1, fs);
-	}
-	int type = 1;
-	inode in = malloc(sizeof(struct str_iNode));
-	in->type = type;
-	for (int i = 0; i < 10; i++) 
-	{
-		in->folder.nodes[i] = NULL;
-	}
-	fseek(fs, fileSystem.istart, SEEK_SET);
-	fwrite(in, sizeof(struct str_iNode), 1, fs);
-
-	fclose(fs);
-}
-
-inode ReadiNode(int index) 
-{
-    FILE* fs = fopen(binary_path, "rb+");
-    fseek(fs, index, SEEK_SET);
-    inode in = malloc(sizeof(struct str_iNode));
-	fread(in, sizeof(struct str_iNode), 1, fs);
-    fclose(fs);
-    return in;
-}
-
-void PrintiNode(inode n) 
-{
-    if (n->type == 1) 
+    int result = -1;
+    if (number >= 0 && lseek(fileDest, blockSize * number, SEEK_SET) >= 0)
     {
-        for (int i = 0; i < 10; i++) 
+        if (write(fileDest, block, blockSize) == blockSize)
         {
-	        printf("%d, %d, %s, %d\n", i, n->folder.nodes[i], n->folder.name[i], n->type);
+            result = 0;
         }
     }
+    return result;
 }
 
-int AddChildiNode(inode parent, int parentIndex, inode child, const char* nameChild)
+int rootCreator()
 {
-	int pos = FindFreeiNode();
-	FILE *fs = fopen(binary_path, "rb+");	
-	if (pos < 0 || parent->type != 1)
-	{
-		return -1;
-	}
-	int i = 0;
-	while (i < 10 && parent->folder.nodes[i] != NULL)
-	{
-		i++;
-	}
-	if (i == 10)
-	{
-		return -1;
-	}
-	parent->folder.nodes[i] = pos;
-	CopyName(parent->folder.name[i], nameChild);	
-	fseek(fs, parentIndex, SEEK_SET);
-	fwrite(parent, sizeof(struct str_iNode), 1, fs);
-	fseek(fs, pos, SEEK_SET);
-	fwrite(child, sizeof(struct str_iNode), 1, fs);
-	fclose(fs);
-	return pos;
+    int res = -1;
+    inode_t *rootNode = (inode_t *)blockCreator();
+    if (rootNode != NULL)
+    {
+        rootNode->name[0] = '\0';
+        rootNode->status = FOLDERBLOCK;
+        rootNode->stat.st_mode = S_IFDIR | 0777;
+        rootNode->stat.st_nlink = 2;
+        if (write_block(isRootBlock, rootNode) == 0)
+        {
+            res = 0;
+        }
+        free(rootNode);
+    }
+    return res;
 }
 
-void CopyName(char* dest, char* source) 
+void makeBinaryFile()
 {
-    int len = strlen(source);
-    int i = 0;
-    for (i; i < len; i++)
+    //Попытаемся открыть файл
+    fileDest = open(binary_path, O_RDWR, 0666);
+    if (fileDest < 0)
     {
-        dest[i] = source[i];
-    }
-    dest[i] = NULL;
-}
-
-inode FindINode(char* path)
-{   
-    if (strcmp(path, "/") == 0)
-    {
-        return ReadiNode(fileSystem.istart);
-    }
-    else
-    {
-	if (strcmp(path, "/qq") == 0)
-    	{
-    		inode n = ReadiNode(fileSystem.istart + fileSystem.isize);
-    		if (n->type == 0) 
-    			return NULL;
-       		return ReadiNode(fileSystem.istart + fileSystem.isize);
-    	}
-        return NULL;
+        //Если не нашли, создадим новый
+        fileDest = open(binary_path, O_CREAT | O_RDWR, 0666);
+        rootCreator();
     }
 }
 
-int FindFreeiNode()
-{
-	FILE *fs = fopen(binary_path, "rb+");
-	inode n = malloc(sizeof(struct str_iNode));	
-	int pos = fileSystem.istart;
-	do
-	{
-		if (pos >= fileSystem.iend - fileSystem.isize)
-		{
-			return -1;
-		}
-		fseek(fs, pos, SEEK_SET);
-		fread(n, sizeof(struct str_iNode), 1, fs);
-		if (n->type == 0)
-		{
-			return pos;
-		}
-		pos += fileSystem.isize;
-	}while (pos < fileSystem.iend);
-	return pos;
-}
-
-void LoadFileSystem() 
-{
-    FILE* fs = fopen(binary_path, "rb+");
-    fseek(fs, 0, SEEK_SET);
-    fread(&fileSystem, sizeof(struct str_FileSystem), 1, fs);
-    fclose(fs);
-}
-
-//Получение атрибутов файла
+/*//Получение атрибутов файла
 static int lithiumdenis_getattr(const char *path, struct stat *stbuf)
 {
     inode n = FindINode(path);
@@ -242,7 +140,7 @@ static int lithiumdenis_mkdir(const char* path, mode_t mode)
 	AddChildiNode(parent, fileSystem.istart, child, name);
 	PrintiNode(parent);
 	return 0;
-}
+}*/
 
 //Изменение размера файла
 static int lithiumdenis_truncate(const char * path, off_t offset) {
@@ -250,16 +148,15 @@ static int lithiumdenis_truncate(const char * path, off_t offset) {
 }
 
 static struct fuse_operations lithiumdenis_operations = {
-	.getattr  = lithiumdenis_getattr,
-	.readdir  = lithiumdenis_readdir,
-	.mkdir    = lithiumdenis_mkdir,
+	//.getattr  = lithiumdenis_getattr,
+	//.readdir  = lithiumdenis_readdir,
+	//.mkdir    = lithiumdenis_mkdir,
         .truncate = lithiumdenis_truncate
 };
 
 
 int main(int argc, char *argv[])
 {
-        FillBinaryFile();
-        LoadFileSystem();
+        makeBinaryFile();
 	return fuse_main(argc, argv, &lithiumdenis_operations, NULL);
 }
