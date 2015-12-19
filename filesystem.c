@@ -25,9 +25,9 @@ const int blockSize = 4096;
 int fileDest = -1;
 const int isRootBlock = 0;
 
+//Данные о файле
 typedef struct stat stat_t;
 typedef struct node inode_t;
-
 struct node
 {
     char name[NLENGTH];
@@ -36,12 +36,14 @@ struct node
     stat_t stat;
 };
 
+//Создаём блок
 void *blockCreator()
 {
     return calloc(blockSize, sizeof(char));
 }
 
-int write_block(int number, void *block)
+//Записываем блок
+int blockWriter(int number, void *block)
 {
     int result = -1;
     if (number >= 0 && lseek(fileDest, blockSize * number, SEEK_SET) >= 0)
@@ -54,6 +56,7 @@ int write_block(int number, void *block)
     return result;
 }
 
+//Создаем корневой элемент
 int rootCreator()
 {
     int res = -1;
@@ -64,7 +67,7 @@ int rootCreator()
         rootNode->status = FOLDERBLOCK;
         rootNode->stat.st_mode = S_IFDIR | 0777;
         rootNode->stat.st_nlink = 2;
-        if (write_block(isRootBlock, rootNode) == 0)
+        if (blockWriter(isRootBlock, rootNode) == 0)
         {
             res = 0;
         }
@@ -73,6 +76,7 @@ int rootCreator()
     return res;
 }
 
+//Создаём файл или пытаемся работать с известным
 void makeBinaryFile()
 {
     //Попытаемся открыть файл
