@@ -271,12 +271,26 @@ static int lithiumdenis_open(const char *path, struct fuse_file_info *fi)
 	return 0;
 }
 
+//Определение опций открытия директории
+static int lithiumdenis_opendir(const char *path, struct fuse_file_info *fi) 
+{
+        inode n = FindINode(path);
+        //Если нет
+	if (n == NULL) 
+		return -ENOENT;
+        //Если не директория
+	if (n->type != 1)
+		return -ENOENT;
+	return 0;
+}
+
 static struct fuse_operations lithiumdenis_operations = {
 	.getattr  = lithiumdenis_getattr,
 	.readdir  = lithiumdenis_readdir,
 	.mkdir    = lithiumdenis_mkdir,
         .truncate = lithiumdenis_truncate,
-        .open     = lithiumdenis_open
+        .open     = lithiumdenis_open,
+        .opendir  = lithiumdenis_opendir
 };
 
 
