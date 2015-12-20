@@ -18,8 +18,8 @@ char *binary_path = "/home/lithiumdenis/CSF/Filesystem/MyBinaryFile/bigbinary";
 
 typedef struct ifolder_t
 {
-	char names[30][64];
-	unsigned long nodes[30];
+	char names[10][64];
+	unsigned long nodes[10];
 }iFolder;
 
 typedef struct ifile_t
@@ -54,7 +54,7 @@ struct node_s
 	inode inode;
 	node parent;
 	node next;
-	node childs[30];
+	node childs[10];
 	char name[64];
 };
 
@@ -126,7 +126,8 @@ void copyName(char* dest, char* source)
 
 inode readInode(unsigned long index) 
 {
-    if (index == NULL) {
+    if (index == NULL) 
+    {
         return NULL;
     }
     FILE * sys = fileSystem();
@@ -157,8 +158,10 @@ node readTree(unsigned long index, node parent, char* name)
     copyName(h->name, name);
     h->next = readTree(p->next, parent, name);
     if (p->type == 1) {
-        for (int i = 0; i < 10; i++) {
-            if (p->is_folder.nodes[i] != NULL) {
+        for (int i = 0; i < 10; i++) 
+        {
+            if (p->is_folder.nodes[i] != NULL) 
+            {
                 h->childs[i] = readTree(p->is_folder.nodes[i], head, p->is_folder.names[i]);
             } else {
                 h->childs[i] = NULL;
@@ -176,12 +179,15 @@ void loadFileSystem()
     fclose(sys);
 }
 
-void showNode(node nd) {
+void showNode(node nd) 
+{
     printf("Node\n");
     printf("Index: %lu\n", nd->index);
-    if (nd->inode->type == 1) {
+    if (nd->inode->type == 1) 
+    {
         printf("This is directory\n");
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 10; i++) 
+        {
             printf("hild [%d] is NULL %d\n", i, nd->childs[i] == NULL);
             printf("Child of inode [%d] is NULL %d\n", i, nd->inode->is_folder.nodes[i] == NULL);
             if (nd->inode->is_folder.nodes[i] != NULL) 
@@ -196,7 +202,8 @@ void saveNode(node nd)
     fseek(sys, nd->index, SEEK_SET);
     if (nd->inode->type != 0)
         fwrite(nd->inode, sizeof(struct inode_s), 1, sys);
-    else {
+    else 
+    {
         int stat = NULL;
         fwrite(&stat, 4, 1, sys);
     }
@@ -207,7 +214,8 @@ void add(node parent, node child)
 {
     int i = 0;
     while (i < 10 && parent->childs[i] != NULL) i++;
-    if (i < 10) {
+    if (i < 10) 
+    {
         parent->childs[i] = child;
         child->parent = parent;
         parent->inode->is_folder.nodes[i] = child->index;
@@ -246,7 +254,8 @@ void delete(node nd)
 node searchChildByName(char* name, node parent) 
 {
     node n = parent;
-    do {
+    do 
+    {
         for (int i = 0; i < 10; i++) 
         {
             if (n->childs[i] != NULL) 
@@ -303,7 +312,8 @@ node searchByName(char* path)
     }
     printf("Count %d\n", count);
     if (count == 1) {
-        if (strcmp(path, "/") == 0) {
+        if (strcmp(path, "/") == 0) 
+        {
             return fs_cash;
             printf("This is root, inode_start %d\n", fs_info.inode_start);
         }
@@ -352,7 +362,8 @@ unsigned long searchFreeDataNode()
 
 void freeNode(node nd) 
 {
-    do {
+    do 
+    {
         if (nd->inode->type == 1) 
         {
             for (int i = 0; i < 0; i++) 
@@ -496,102 +507,11 @@ void FillBinaryFile()
 	fclose(fs);
 }
 
-//Получение атрибутов файла
-/*static int lithiumdenis_getattr(const char *path, struct stat *stbuf)
-{
-    inode n = FindINode(path);
-    if (n != NULL)
-    {
-        if (n->type == 1) 
-        {
-            //Директория
-            stbuf->st_mode = 0777 | S_IFDIR;
-            stbuf->st_nlink = 3;
-            return 0;
-        }
-        else if(n->type == 2)
-        {
-            //Файл
-            stbuf->st_mode = 0666 | S_IFREG;
-	    stbuf->st_nlink = 1;
-            return 0;
-        }
-    }
-    else
-        return -ENOENT;
-}
-
-//Получение содержимого папки
-static int lithiumdenis_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-			 off_t offset, struct fuse_file_info *fi)
-{
-    inode n = FindINode("/");
-    PrintiNode(n);
-    if (n == NULL) 
-    {
-        return -ENOENT;
-    } 
-    else 
-    { 
-        if (n->type == 1) 
-        {
-	        for (int i = 0; i < 10; i++) 
-	        {
-                if (n->folder.nodes[i] != NULL)
-       	         	filler(buf, n->folder.name[i], NULL, 0);
-        	}
-        	return 0;
-        }
-        return -ENOENT;
-    }
-}
-
-//Создание папки
-static int lithiumdenis_mkdir(const char* path, mode_t mode) 
-{
-	inode parent = ReadiNode(fileSystem.istart);
-
-	inode child = malloc(sizeof(struct str_iNode));
-	child->type = 1;
-
-	char* name = strtok(path, "/");
-
-	AddChildiNode(parent, fileSystem.istart, child, name);
-	PrintiNode(parent);
-	return 0;
-}*/
-
 //Изменение размера файла
 static int lithiumdenis_truncate(const char * path, off_t offset) 
 {
 	return 0;
 }
-
-//Определение опций открытия файла
-/*static int lithiumdenis_open(const char *path, struct fuse_file_info *fi) 
-{
-        inode n = FindINode(path);
-        //Если нет
-	if (n == NULL) 
-		return -ENOENT;
-        //Если не файл
-	if (n->type != 2)
-		return -ENOENT;
-	return 0;
-}
-
-//Определение опций открытия директории
-static int lithiumdenis_opendir(const char *path, struct fuse_file_info *fi) 
-{
-        inode n = FindINode(path);
-        //Если нет
-	if (n == NULL) 
-		return -ENOENT;
-        //Если не директория
-	if (n->type != 1)
-		return -ENOENT;
-	return 0;
-}*/
 
 static struct fuse_operations lithiumdenis_operations = {
 	//.getattr  = lithiumdenis_getattr,
