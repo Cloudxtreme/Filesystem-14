@@ -1,4 +1,5 @@
 #define FUSE_USE_VERSION 26
+#define SIZE 4096
 
 #define DEBUG 
 #ifdef DEBUG
@@ -10,28 +11,439 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <unistd.h>
 
-static const char *binary_path = "/home/lithiumdenis/CSF/Filesystem/MyBinaryFile/bigbinary";
+char *binary_path = "/home/lithiumdenis/CSF/Filesystem/MyBinaryFile/bigbinary";
 
-typedef struct str_iFolder 
-{ 
-	char name[10][5];
-	int nodes[10];
+typedef struct ifolder_t
+{
+	char names[30][64];
+	unsigned long nodes[30];
 }iFolder;
 
-typedef struct str_iNode *inode;
-struct str_iNode
+typedef struct ifile_t
+{
+	int used_count;
+	int total_size;
+	unsigned long data[50];	
+}iFile;
+
+typedef struct inode_s * inode;
+struct inode_s 
 {
 	int type;
-	iFolder folder;
+	unsigned long next;
+	union {
+		iFolder is_folder;
+		iFile is_file;
+	};
 };
 
-struct str_FileSystem 
+typedef struct file_node_s * file_node;
+struct file_node_s
 {
-	int istart;
-	int iend;
-	int isize;
-}fileSystem;
+	char data[SIZE];
+	int size;
+};
+
+typedef struct node_s * node;
+struct node_s 
+{
+	unsigned long index;
+	inode inode;
+	node parent;
+	node next;
+	node childs[30];
+	char name[64];
+};
+
+struct fs_info_s 
+{
+	int inode_start;
+	int inode_size;
+	int data_node_size;
+	unsigned long dev_size;
+	unsigned long data_start;
+}fs_info;
+
+extern char* filesys;
+node fs_cash;
+
+FILE* fileSystem() 
+{
+    FILE* sys = fopen(binary_path, "rb+");
+    fseek(sys, 0, SEEK_SET);
+    return sys;
+}
+
+char** split(char* path) 
+{
+    char* buf = malloc((strlen(path) + 1) * sizeof(char));
+    MakeSplit(buf, path);
+    char** res;
+    if (strlen(buf) > 1) {
+        int count = 0;
+        int i = 0;
+        while(buf[i] != 0)
+            if (buf[i++] == '/') 
+                count++;
+        res = malloc(sizeof(char*)*(count + 2));
+        res[count + 1] = 0;
+        res[0] = "/";
+        char* pointer = strtok(buf, "/");
+        i = 1;
+        while(pointer) {
+            res[i++] = pointer;
+            pointer = strtok(NULL, "/");
+        }
+    } else {
+        res = (char**)malloc(sizeof(char*) * 2);
+        res[1] = 0;
+        res[0] = "/";
+    }
+    return res;
+}
+
+void MakeSplit(char* dest, char* source) 
+{
+    int length = strlen(source);
+    int i = 0;
+    for (; i < length; i++)
+        dest[i] = source[i];
+     dest[i] = NULL;
+}
+
+void copyName(char* dest, char* source) 
+{
+    int length = strlen(source);
+    length = length > 31 ? 31 : length;
+    int i = 0;
+    for (; i < length; i++)
+        dest[i] = source[i];
+    dest[i] = NULL;
+}
+
+inode readInode(unsigned long index) 
+{
+    if (index == NULL) {
+        return NULL;
+    }
+    FILE * sys = fileSystem();
+    fseek(sys, index, SEEK_SET);
+    inode in = malloc(sizeof(struct inode_s));
+    fread(in, sizeof(struct inode_s), 1, sys);
+    if (in->type == 0) {
+        return NULL;
+    }
+    fclose(sys);
+    return in;
+}
+
+node readTree(unsigned long index, node parent, char* name) 
+{
+    if (index == NULL) 
+        return NULL;
+    inode in = readInode(index);
+    if (in == NULL) {
+        return NULL;    
+    } 
+    inode p = in;
+    node head = malloc(sizeof(struct node_s));
+    node h = head;
+    h->parent = parent;
+    h->index = index;
+    h->inode = p;
+    copyName(h->name, name);
+    h->next = readTree(p->next, parent, name);
+    if (p->type == 1) {
+        for (int i = 0; i < 10; i++) {
+            if (p->is_folder.nodes[i] != NULL) {
+                h->childs[i] = readTree(p->is_folder.nodes[i], head, p->is_folder.names[i]);
+            } else {
+                h->childs[i] = NULL;
+            }
+        }
+    }
+    return h;
+}
+
+void loadFileSystem() 
+{
+    FILE * sys = fileSystem();
+    fread(&fs_info, sizeof(struct fs_info_s), 1, sys);
+    fs_cash = readTree(fs_info.inode_start, NULL, "/");
+    fclose(sys);
+}
+
+void showNode(node nd) {
+    printf("Node\n");
+    printf("Index: %lu\n", nd->index);
+    if (nd->inode->type == 1) {
+        printf("This is directory\n");
+        for (int i = 0; i < 10; i++) {
+            printf("hild [%d] is NULL %d\n", i, nd->childs[i] == NULL);
+            printf("Child of inode [%d] is NULL %d\n", i, nd->inode->is_folder.nodes[i] == NULL);
+            if (nd->inode->is_folder.nodes[i] != NULL) 
+                printf("Child's name [%d] %s\n", i, nd->inode->is_folder.names[i]);
+        }
+    }
+}
+
+void saveNode(node nd) 
+{
+    FILE * sys = fileSystem();
+    fseek(sys, nd->index, SEEK_SET);
+    if (nd->inode->type != 0)
+        fwrite(nd->inode, sizeof(struct inode_s), 1, sys);
+    else {
+        int stat = NULL;
+        fwrite(&stat, 4, 1, sys);
+    }
+    fclose(sys);
+}
+
+void add(node parent, node child) 
+{
+    int i = 0;
+    while (i < 10 && parent->childs[i] != NULL) i++;
+    if (i < 10) {
+        parent->childs[i] = child;
+        child->parent = parent;
+        parent->inode->is_folder.nodes[i] = child->index;
+        copyName(parent->inode->is_folder.names[i], child->name);
+        saveNode(child);
+        saveNode(parent);
+    }
+}
+
+void clearChild(node parent, node child) 
+{
+    if (parent == NULL) return;
+    node n = parent;
+    if (parent->inode->type != 1) return;
+    do {
+        for (int i = 0; i < 10; i++) 
+        {
+            if (n->inode->is_folder.nodes[i] == child->index) 
+            {
+                n->inode->is_folder.nodes[i] = NULL;
+                n->childs[i] = NULL;
+                saveNode(n);
+                return;
+            }
+        }
+        n = n->next;
+    } while(n != NULL);
+}
+
+void delete(node nd) 
+{
+    clearChild(nd->parent, nd);
+    freeNode(nd);
+}
+
+node searchChildByName(char* name, node parent) 
+{
+    node n = parent;
+    do {
+        for (int i = 0; i < 10; i++) 
+        {
+            if (n->childs[i] != NULL) 
+            {
+                if (strcmp(n->childs[i]->name, name) == 0)
+                    return n->childs[i];
+            }
+        }
+        n = n->next;
+    } while (n != NULL);
+    return NULL;
+}
+
+node searchParent(char* path) 
+{
+    char** pathDecomp = split(path);
+    int i = 0, count = 0;
+    while(pathDecomp[i++] != NULL) 
+    {
+        count++;
+    }
+    if (count == 2) 
+    {
+        if (strcmp(pathDecomp[0], "/") == 0) 
+        {
+            return fs_cash;
+        }
+        else 
+        {
+            return NULL;
+        }
+    } else 
+      {
+        printf(">>Search \n");
+        node nd = fs_cash;
+        i = 1;
+        while (pathDecomp[i+1] != NULL) 
+        {
+            nd = searchChildByName(pathDecomp[i], nd);
+            if (nd == NULL) return NULL;
+            i++;
+        }
+        return nd;
+    }
+}
+
+node searchByName(char* path) 
+{
+    char** pathDecomp = split(path);
+    int i = 0, count = 0;
+    while(pathDecomp[i++] != NULL) 
+    {
+        count++;
+    }
+    printf("Count %d\n", count);
+    if (count == 1) {
+        if (strcmp(path, "/") == 0) {
+            return fs_cash;
+            printf("This is root, inode_start %d\n", fs_info.inode_start);
+        }
+        else 
+        {
+            printf("ERROR! Not root\n");
+            return NULL;
+        }
+    } else 
+    {
+        node folder = searchParent(path);
+        if (folder == NULL) return NULL;
+        return searchChildByName(pathDecomp[count - 1], folder);
+    }
+}
+
+file_node dataOfNode(unsigned long index) 
+{
+    FILE * sys = fileSystem();
+    file_node n = malloc(sizeof(struct file_node_s));
+    fseek(sys, index, SEEK_SET);
+    int stat;
+    fread(&stat, 4, 1, sys);
+    if (stat == NULL) return NULL;
+    fseek(sys, index, SEEK_SET);
+    fread(n, sizeof(struct file_node_s), 1, sys);
+    fclose(sys);
+    return n;
+}
+
+unsigned long searchFreeDataNode() 
+{
+    FILE * sys = fileSystem();
+    fseek(sys, fs_info.data_start, SEEK_SET);
+    unsigned long pos = fs_info.data_start;
+    int stat;
+    do 
+    {
+        fread(&stat, 4, 1, sys);
+        pos += fs_info.data_node_size;
+        fseek(sys, pos, SEEK_SET);
+    } while (stat != NULL);
+    fclose(sys);
+    return pos - fs_info.data_node_size;
+}
+
+void freeNode(node nd) 
+{
+    do {
+        if (nd->inode->type == 1) 
+        {
+            for (int i = 0; i < 0; i++) 
+            {
+                if (nd->childs[i] != NULL) 
+                {
+                    freeNode(nd->childs[i]);
+                }
+            }
+        }
+        nd->inode->type = 0;
+        saveNode(nd);
+        free(nd->inode);
+        node next = nd->next;
+        free(nd);
+        nd = next;
+    } while (nd != NULL);
+}
+
+file_node dataOfEmptyNode() 
+{
+    file_node fn = malloc(sizeof(struct file_node_s));
+    for (int i = 0; i < SIZE; i++) 
+        fn->data[i] = NULL;
+    fn->size = 0;
+}
+
+void saveData(file_node nd, unsigned long index) 
+{
+    FILE * sys = fileSystem();
+    fseek(sys, index, SEEK_SET);
+    fwrite(nd, sizeof(struct file_node_s), 1, sys);
+    fclose(sys);
+}
+
+node createNodeEmptyInode(inode ind, unsigned long index) 
+{
+    node head = malloc(sizeof(struct node_s));
+    head->index = index;
+    head->inode = ind;
+    head->parent = NULL;
+    head->next = NULL;
+    for (int i = 0; i < 10; i++) 
+    {
+        head->childs[i] = NULL;
+    }
+    return head;
+}
+
+inode emptyInode(int type) 
+{
+    inode in = malloc(sizeof(struct inode_s));
+    in->type = type;
+    in->next = NULL;
+    if (type == 1) 
+    {
+        for (int i = 0; i < 10; i++) 
+        {
+            in->is_folder.nodes[i] = NULL;
+        }
+    } else if (type == 2) 
+      {
+        for (int i = 0; i < 49; i++) 
+        {
+            in->is_file.data[i] = NULL;
+        }
+        in->is_file.used_count = 0;
+        in->is_file.total_size = 0;
+    } else 
+      {
+        return NULL;
+      }
+    return in;
+}
+
+
+unsigned long searchFreeInode() 
+{
+    FILE * sys = fileSystem();
+    fseek(sys, fs_info.inode_start, SEEK_SET);
+    unsigned long pos = fs_info.inode_start;
+    int stat;
+    do 
+    {
+        fread(&stat, 4, 1, sys);
+        pos += fs_info.inode_size;
+        fseek(sys, pos, SEEK_SET);
+    } while (stat != NULL);
+    fclose(sys);
+    return pos - fs_info.inode_size;
+}
 
 int KnowSizeFile()
 {
@@ -56,139 +468,36 @@ void FillBinaryFile()
 	int size = KnowSizeFile();
 	FILE* fs = fopen(binary_path, "rb+"); 
 	fseek(fs, 0, SEEK_SET);
-	fileSystem.isize = sizeof(struct str_iNode);
-	fileSystem.istart = sizeof(struct str_FileSystem);
-	fileSystem.iend = size;
-	fwrite(&fileSystem, sizeof(struct str_FileSystem), 1, fs);
-	for (int i = fileSystem.istart; i < fileSystem.iend - fileSystem.isize; i += fileSystem.isize) 
+        
+         fs_info.inode_size = sizeof(struct inode_s);
+         fs_info.inode_start = sizeof(struct fs_info_s);
+         fs_info.dev_size = size;
+         fs_info.data_node_size = sizeof(struct file_node_s);
+         fs_info.data_start = (unsigned long)(size * 0.05);
+        
+	fwrite(&fs_info, sizeof(struct fs_info_s), 1, fs);
+	
+        for (unsigned long i = fs_info.inode_start; i < fs_info.data_start; i+=fs_info.inode_size) 
 	{
 		fseek(fs, i, SEEK_SET);  
 		int x = 0;
 		fwrite(&x, 4, 1, fs);
 	}
 	int type = 1;
-	inode in = malloc(sizeof(struct str_iNode));
+	inode in = malloc(sizeof(struct inode_s));
 	in->type = type;
 	for (int i = 0; i < 10; i++) 
 	{
-		in->folder.nodes[i] = NULL;
+		in->is_folder.nodes[i] = NULL;
 	}
-	fseek(fs, fileSystem.istart, SEEK_SET);
-	fwrite(in, sizeof(struct str_iNode), 1, fs);
+	fseek(fs, fs_info.inode_start, SEEK_SET);
+	fwrite(in, sizeof(struct inode_s), 1, fs);
 
 	fclose(fs);
-}
-
-inode ReadiNode(int index) 
-{
-    FILE* fs = fopen(binary_path, "rb+");
-    fseek(fs, index, SEEK_SET);
-    inode in = malloc(sizeof(struct str_iNode));
-	fread(in, sizeof(struct str_iNode), 1, fs);
-    fclose(fs);
-    return in;
-}
-
-void PrintiNode(inode n) 
-{
-    if (n->type == 1) 
-    {
-        for (int i = 0; i < 10; i++) 
-        {
-	        printf("%d, %d, %s, %d\n", i, n->folder.nodes[i], n->folder.name[i], n->type);
-        }
-    }
-}
-
-int AddChildiNode(inode parent, int parentIndex, inode child, const char* nameChild)
-{
-	int pos = FindFreeiNode();
-	FILE *fs = fopen(binary_path, "rb+");	
-	if (pos < 0 || parent->type != 1)
-	{
-		return -1;
-	}
-	int i = 0;
-	while (i < 10 && parent->folder.nodes[i] != NULL)
-	{
-		i++;
-	}
-	if (i == 10)
-	{
-		return -1;
-	}
-	parent->folder.nodes[i] = pos;
-	CopyName(parent->folder.name[i], nameChild);	
-	fseek(fs, parentIndex, SEEK_SET);
-	fwrite(parent, sizeof(struct str_iNode), 1, fs);
-	fseek(fs, pos, SEEK_SET);
-	fwrite(child, sizeof(struct str_iNode), 1, fs);
-	fclose(fs);
-	return pos;
-}
-
-void CopyName(char* dest, char* source) 
-{
-    int len = strlen(source);
-    int i = 0;
-    for (i; i < len; i++)
-    {
-        dest[i] = source[i];
-    }
-    dest[i] = NULL;
-}
-
-inode FindINode(char* path)
-{   
-    if (strcmp(path, "/") == 0)
-    {
-        return ReadiNode(fileSystem.istart);
-    }
-    else
-    {
-	if (strcmp(path, "/qq") == 0)
-    	{
-    		inode n = ReadiNode(fileSystem.istart + fileSystem.isize);
-    		if (n->type == 0) 
-    			return NULL;
-       		return ReadiNode(fileSystem.istart + fileSystem.isize);
-    	}
-        return NULL;
-    }
-}
-
-int FindFreeiNode()
-{
-	FILE *fs = fopen(binary_path, "rb+");
-	inode n = malloc(sizeof(struct str_iNode));	
-	int pos = fileSystem.istart;
-	do
-	{
-		if (pos >= fileSystem.iend - fileSystem.isize)
-		{
-			return -1;
-		}
-		fseek(fs, pos, SEEK_SET);
-		fread(n, sizeof(struct str_iNode), 1, fs);
-		if (n->type == 0)
-		{
-			return pos;
-		}
-		pos += fileSystem.isize;
-	}while (pos < fileSystem.iend);
-	return pos;
-}
-
-void LoadFileSystem() 
-{
-    FILE* fs = fopen(binary_path, "rb+");
-    fseek(fs, 0, SEEK_SET);
-    fread(&fileSystem, sizeof(struct str_FileSystem), 1, fs);
-    fclose(fs);
 }
 
 //Получение атрибутов файла
-static int lithiumdenis_getattr(const char *path, struct stat *stbuf)
+/*static int lithiumdenis_getattr(const char *path, struct stat *stbuf)
 {
     inode n = FindINode(path);
     if (n != NULL)
@@ -250,7 +559,7 @@ static int lithiumdenis_mkdir(const char* path, mode_t mode)
 	AddChildiNode(parent, fileSystem.istart, child, name);
 	PrintiNode(parent);
 	return 0;
-}
+}*/
 
 //Изменение размера файла
 static int lithiumdenis_truncate(const char * path, off_t offset) 
@@ -259,7 +568,7 @@ static int lithiumdenis_truncate(const char * path, off_t offset)
 }
 
 //Определение опций открытия файла
-static int lithiumdenis_open(const char *path, struct fuse_file_info *fi) 
+/*static int lithiumdenis_open(const char *path, struct fuse_file_info *fi) 
 {
         inode n = FindINode(path);
         //Если нет
@@ -282,21 +591,22 @@ static int lithiumdenis_opendir(const char *path, struct fuse_file_info *fi)
 	if (n->type != 1)
 		return -ENOENT;
 	return 0;
-}
+}*/
 
 static struct fuse_operations lithiumdenis_operations = {
-	.getattr  = lithiumdenis_getattr,
-	.readdir  = lithiumdenis_readdir,
-	.mkdir    = lithiumdenis_mkdir,
+	//.getattr  = lithiumdenis_getattr,
+	//.readdir  = lithiumdenis_readdir,
+	//.mkdir    = lithiumdenis_mkdir,
         .truncate = lithiumdenis_truncate,
-        .open     = lithiumdenis_open,
-        .opendir  = lithiumdenis_opendir
+        //.open     = lithiumdenis_open,
+        //.opendir  = lithiumdenis_opendir
 };
 
 
 int main(int argc, char *argv[])
 {
         FillBinaryFile();
-        LoadFileSystem();
+        loadFileSystem();
+	searchFreeInode();
 	return fuse_main(argc, argv, &lithiumdenis_operations, NULL);
 }
