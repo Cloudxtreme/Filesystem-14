@@ -45,7 +45,7 @@ void FillBinaryFile()
 {
         //Заполняем файл нулями
         FILE* f = fopen(binary_path, "wt");
-	for (int i = 0; i < 10000000; i++)
+	for (int i = 0; i < 1000000; i++)
 	{
 		fprintf(f, "%d\n", 0);
 		fprintf(f, "\n");
@@ -195,8 +195,16 @@ static int lithiumdenis_getattr(const char *path, struct stat *stbuf)
     {
         if (n->type == 1) 
         {
+            //Директория
             stbuf->st_mode = 0777 | S_IFDIR;
-            stbuf->st_nlink = 2;
+            stbuf->st_nlink = 3;
+            return 0;
+        }
+        else if(n->type == 2)
+        {
+            //Файл
+            stbuf->st_mode = 0666 | S_IFREG;
+	    stbuf->st_nlink = 1;
             return 0;
         }
     }
@@ -245,7 +253,21 @@ static int lithiumdenis_mkdir(const char* path, mode_t mode)
 }
 
 //Изменение размера файла
-static int lithiumdenis_truncate(const char * path, off_t offset) {
+static int lithiumdenis_truncate(const char * path, off_t offset) 
+{
+	return 0;
+}
+
+//Определение опций открытия файла
+static int lithiumdenis_open(const char *path, struct fuse_file_info *fi) 
+{
+        inode n = FindINode(path);
+        //Если нет
+	if (n == NULL) 
+		return -ENOENT;
+        //Если не файл
+	if (n->type != 2)
+		return -ENOENT;
 	return 0;
 }
 
@@ -253,7 +275,8 @@ static struct fuse_operations lithiumdenis_operations = {
 	.getattr  = lithiumdenis_getattr,
 	.readdir  = lithiumdenis_readdir,
 	.mkdir    = lithiumdenis_mkdir,
-        .truncate = lithiumdenis_truncate
+        .truncate = lithiumdenis_truncate,
+        .open     = lithiumdenis_open
 };
 
 
