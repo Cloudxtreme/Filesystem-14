@@ -620,6 +620,91 @@ static int lithiumdenis_rmdir(const char *path)
 	return 0;
 }
 
+//Создание
+static int lithiumdenis_create(const char *path, mode_t mode, struct fuse_file_info *fi) 
+{
+	int index = searchFreeInode();
+	char** names = split(path);
+	int i = 0, count = 0;
+	while(names[i++] != NULL)
+		count++;
+	char* name = names[count - 1];
+	node parent = searchParent(path);
+	inode in = emptyInode(2);
+	node n = createNodeEmptyInode(in, index);
+	copyName(n->name, name);
+	add(parent, n);
+	return 0;
+}
+
+//Чтение из файла
+static int lithiumdenis_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *finfo) 
+{
+	node file = searchByName(path);
+        //Если не файл
+	if (file->inode->type != 2)
+		return -ENOENT;
+	int block_num, node_num;
+	int node_capacity = size * 50;
+	node_num = offset / node_capacity;
+	offset -= node_num * node_capacity;
+	block_num = offset / size;
+	offset -= block_num * size;
+	int nind = node_num;
+	while (nind > 0) 
+        {
+		if (file->next == NULL) return 0;
+		file = file->next;
+	}
+	if (file->inode->is_file.data[block_num] == NULL) 
+		return 0;
+	file_node nd = dataOfNode(file->inode->is_file.data[block_num]);
+	if (nd == NULL)
+                return 0;
+	if (nd->size == 0)
+		return 0;
+
+	size_t read_size = size;
+	size_t readed_size = 0;
+	size_t len = nd->size;
+	if (offset < len) 
+        {
+	    do 
+            {
+	        if (offset + size > len)
+		    read_size = len - offset;
+		    memcpy(buf + readed_size, nd->data + offset, read_size);
+		    size -= read_size;
+		    readed_size += read_size;
+		    if (len < size - 1) 
+                        return readed_size;
+		    if ((int)size > 0) 
+                    {
+		        if (block_num < 49) 
+			    block_num++;
+                        else 
+                        {
+			    file = file->next;
+			    block_num = 0;
+			    if (file == NULL)
+			        return 0;
+			}
+			offset = 0;
+			if (file->inode->is_file.data[block_num] == NULL) 
+			    return readed_size;
+			nd = dataOfNode(file->inode->is_file.data[block_num]);
+			if (nd == NULL) 
+			    return readed_size;
+			if (nd->size == 0) 
+			    return readed_size;
+		    }
+		} while ((int)size > 0);
+	} 
+        else
+	    readed_size = 0;
+        return readed_size;
+}
+
 static struct fuse_operations lithiumdenis_operations = {
 	.getattr  = lithiumdenis_getattr,
 	.readdir  = lithiumdenis_readdir,
@@ -627,7 +712,9 @@ static struct fuse_operations lithiumdenis_operations = {
         .truncate = lithiumdenis_truncate,
         .open     = lithiumdenis_open,
         .opendir  = lithiumdenis_opendir,
-        .rmdir    = lithiumdenis_rmdir
+        .rmdir    = lithiumdenis_rmdir,
+        .create    = lithiumdenis_create,
+        .read    = lithiumdenis_read
 };
 
 int main(int argc, char *argv[])
