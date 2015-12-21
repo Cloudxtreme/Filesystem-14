@@ -513,10 +513,84 @@ static int lithiumdenis_truncate(const char * path, off_t offset)
 	return 0;
 }
 
+//Получение атрибутов файла
+static int lithiumdenis_getattr(const char *path, struct stat *stbuf) 
+{
+	node nd = searchByName(path);
+	if (nd == NULL) 
+        {
+		return -ENOENT;
+	} 
+        else 
+        {
+	    if (nd->inode->type == 2) 
+            {
+                //Файл
+	        stbuf->st_mode = S_IFREG | 0666;
+		stbuf->st_nlink = 1;
+		stbuf->st_size = nd->inode->is_file.total_size;
+		return 0;
+	    } 
+            else
+            {
+	        //Директория
+		stbuf->st_mode = S_IFDIR | 0777;
+		stbuf->st_nlink = 3;
+		return 0;
+            }
+	}
+}
+
+static int lithiumdenis_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) 
+{
+	node nd = searchByName(path);
+	if (nd == NULL) 
+        {
+	    //Файл не открыт
+	    return -ENOENT;
+	} 
+        else 
+        { 
+	    if (nd->inode->type == 1) 
+            {
+	        filler(buf, ".", NULL, 0);	
+		filler(buf, "..", NULL, 0);
+		node n1 = nd;
+		do 
+                {
+		    for (int i = 0; i < 10; i++) 
+                    {
+		        if (nd->childs[i] != NULL)
+			    filler(buf, nd->childs[i]->name, NULL, 0);
+		    }
+		    nd = nd->next;
+		} while (nd != NULL);
+		    return 0;
+	    }
+	    return -ENOENT;
+	}
+}
+
+static int lithiumdenis_mkdir(const char* path, mode_t mode) 
+{
+	int index = searchFreeInode();
+	char** names = split(path);
+	int i = 0, count = 0;
+	while(names[i++] != NULL) 
+	    count++;
+	char* name = names[count - 1];
+	node parent = searchParent(path);
+	inode ind = emptyInode(1);
+	node nd = createNodeEmptyInode(ind, index);
+	copyName(nd->name, name);
+	add(parent, nd);
+	return 0;
+}
+
 static struct fuse_operations lithiumdenis_operations = {
-	//.getattr  = lithiumdenis_getattr,
-	//.readdir  = lithiumdenis_readdir,
-	//.mkdir    = lithiumdenis_mkdir,
+	.getattr  = lithiumdenis_getattr,
+	.readdir  = lithiumdenis_readdir,
+	.mkdir    = lithiumdenis_mkdir,
         .truncate = lithiumdenis_truncate,
         //.open     = lithiumdenis_open,
         //.opendir  = lithiumdenis_opendir
