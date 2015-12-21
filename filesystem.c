@@ -723,6 +723,20 @@ static int lithiumdenis_release(const char *path, struct fuse_file_info *fi)
 	return 0;
 }
 
+//Делает возможным процесс кэширования
+static int lithiumdenis_flush(const char *path, struct fuse_file_info *fi)
+{
+	int rt;
+	int efile = fi->fh;
+	return 0;
+}
+
+//Запись в файл
+static int lithiumdenis_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) 
+{
+    return 0;
+}
+
 static struct fuse_operations lithiumdenis_operations = {
 	.getattr  = lithiumdenis_getattr,
 	.readdir  = lithiumdenis_readdir,
@@ -734,7 +748,9 @@ static struct fuse_operations lithiumdenis_operations = {
         .create   = lithiumdenis_create,
         .read     = lithiumdenis_read,
         .unlink   = lithiumdenis_unlink,
-        .release  = lithiumdenis_release
+        .release  = lithiumdenis_release,
+        .flush    = lithiumdenis_flush,
+        .write    = lithiumdenis_write
 };
 
 int main(int argc, char *argv[])
