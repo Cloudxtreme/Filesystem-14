@@ -541,6 +541,7 @@ static int lithiumdenis_getattr(const char *path, struct stat *stbuf)
 	}
 }
 
+//Получение содержимого папки
 static int lithiumdenis_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) 
 {
 	node nd = searchByName(path);
@@ -571,6 +572,7 @@ static int lithiumdenis_readdir(const char *path, void *buf, fuse_fill_dir_t fil
 	}
 }
 
+//Создание папки
 static int lithiumdenis_mkdir(const char* path, mode_t mode) 
 {
 	int index = searchFreeInode();
@@ -587,15 +589,46 @@ static int lithiumdenis_mkdir(const char* path, mode_t mode)
 	return 0;
 }
 
+//Свойства открытия файла
+static int lithiumdenis_open(const char *path, struct fuse_file_info *fi) 
+{
+	node nd = searchByName(path);
+	if (nd == NULL) 
+		return -ENOENT;
+	if (nd->inode->type != 2)
+		return -ENOENT;
+	return 0;
+}
+
+//Свойства открытия директории
+static int lithiumdenis_opendir(const char *path, struct fuse_file_info *fi) 
+{
+	node nd = searchByName(path);
+	if (nd == NULL) 
+		return -ENOENT;
+	if (nd->inode->type != 1)
+		return -ENOENT;
+	return 0;
+}
+
+//Удаление директории
+static int lithiumdenis_rmdir(const char *path) 
+{
+	node nd = searchByName(path);
+	showNode(nd);
+	delete(nd);
+	return 0;
+}
+
 static struct fuse_operations lithiumdenis_operations = {
 	.getattr  = lithiumdenis_getattr,
 	.readdir  = lithiumdenis_readdir,
 	.mkdir    = lithiumdenis_mkdir,
         .truncate = lithiumdenis_truncate,
-        //.open     = lithiumdenis_open,
-        //.opendir  = lithiumdenis_opendir
+        .open     = lithiumdenis_open,
+        .opendir  = lithiumdenis_opendir,
+        .rmdir    = lithiumdenis_rmdir
 };
-
 
 int main(int argc, char *argv[])
 {
