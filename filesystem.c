@@ -719,7 +719,7 @@ static int lithiumdenis_release(const char *path, struct fuse_file_info *fi)
 {
 	int rt;
 	int efile = fi->fh;
-        fclose(efile);
+        //fclose(efile);
 	return 0;
 }
 
