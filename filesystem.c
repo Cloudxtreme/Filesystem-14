@@ -705,6 +705,15 @@ static int lithiumdenis_read(const char *path, char *buf, size_t size, off_t off
         return readed_size;
 }
 
+//Удаление файла
+static int lithiumdenis_unlink(const char *path) 
+{
+	node nd = searchByName(path);
+	showNode(nd);
+	delete(nd);
+	return 0;
+}
+
 static struct fuse_operations lithiumdenis_operations = {
 	.getattr  = lithiumdenis_getattr,
 	.readdir  = lithiumdenis_readdir,
@@ -713,8 +722,9 @@ static struct fuse_operations lithiumdenis_operations = {
         .open     = lithiumdenis_open,
         .opendir  = lithiumdenis_opendir,
         .rmdir    = lithiumdenis_rmdir,
-        .create    = lithiumdenis_create,
-        .read    = lithiumdenis_read
+        .create   = lithiumdenis_create,
+        .read     = lithiumdenis_read,
+        .unlink   = lithiumdenis_unlink
 };
 
 int main(int argc, char *argv[])
