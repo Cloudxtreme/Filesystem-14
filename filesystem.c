@@ -714,6 +714,15 @@ static int lithiumdenis_unlink(const char *path)
 	return 0;
 }
 
+//Вызывается, когда нет ссылок на открытый файл
+static int lithiumdenis_release(const char *path, struct fuse_file_info *fi)
+{
+	int rt;
+	int efile = fi->fh;
+        fclose(efile);
+	return 0;
+}
+
 static struct fuse_operations lithiumdenis_operations = {
 	.getattr  = lithiumdenis_getattr,
 	.readdir  = lithiumdenis_readdir,
@@ -724,7 +733,8 @@ static struct fuse_operations lithiumdenis_operations = {
         .rmdir    = lithiumdenis_rmdir,
         .create   = lithiumdenis_create,
         .read     = lithiumdenis_read,
-        .unlink   = lithiumdenis_unlink
+        .unlink   = lithiumdenis_unlink,
+        .release  = lithiumdenis_release
 };
 
 int main(int argc, char *argv[])
