@@ -721,22 +721,10 @@ static int lithiumdenis_flush(const char *path, struct fuse_file_info *fi)
 //Запись в файл
 static int lithiumdenis_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) 
 {
-    /*int index = fi->fh;
-    node nd = searchByName(index);
-    if (nd == NULL) 
-		return -ENOENT;
-    else
-    {
-        if(WriteFile(&n, (void *)buf, (long)offset, size) < 0)
-        {
-            return -EIO;
-        }
-        
-        if(WriteInode(index, n) < 0)
-            return -EIO;
-    }*/
+    int rt = 0;
+    rt = pwrite(fi->fh, buf, size, offset);
+    return rt;
 
-    return size;
 }
 
 static struct fuse_operations lithiumdenis_operations = {
