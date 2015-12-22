@@ -80,7 +80,7 @@ FILE* fileSystem()
 char** split(char* path) 
 {
     char* buf = malloc((strlen(path) + 1) * sizeof(char));
-    MakeSplit(buf, path);
+    copyName(buf, path);
     char** res;
     if (strlen(buf) > 1) {
         int count = 0;
@@ -105,19 +105,9 @@ char** split(char* path)
     return res;
 }
 
-void MakeSplit(char* dest, char* source) 
-{
-    int length = strlen(source);
-    int i = 0;
-    for (; i < length; i++)
-        dest[i] = source[i];
-     dest[i] = NULL;
-}
-
 void copyName(char* dest, char* source) 
 {
     int length = strlen(source);
-    length = length > 31 ? 31 : length;
     int i = 0;
     for (; i < length; i++)
         dest[i] = source[i];
@@ -188,7 +178,7 @@ void showNode(node nd)
         printf("This is directory\n");
         for (int i = 0; i < 10; i++) 
         {
-            printf("hild [%d] is NULL %d\n", i, nd->childs[i] == NULL);
+            printf("Child [%d] is NULL %d\n", i, nd->childs[i] == NULL);
             printf("Child of inode [%d] is NULL %d\n", i, nd->inode->is_folder.nodes[i] == NULL);
             if (nd->inode->is_folder.nodes[i] != NULL) 
                 printf("Child's name [%d] %s\n", i, nd->inode->is_folder.names[i]);
@@ -511,7 +501,6 @@ void FillBinaryFile()
 static int lithiumdenis_truncate(const char * path, off_t newsize) 
 {       
         int rt = 0;
-        node nd = searchByName(path);
         rt = truncate(path, newsize);
 	return rt;
 }
@@ -738,7 +727,9 @@ static int lithiumdenis_flush(const char *path, struct fuse_file_info *fi)
 //Запись в файл
 static int lithiumdenis_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) 
 {
-    return 0;
+    int rt = 0;
+    rt = pwrite(fi->fh, buf, size, offset);
+    return rt;
 }
 
 static struct fuse_operations lithiumdenis_operations = {
