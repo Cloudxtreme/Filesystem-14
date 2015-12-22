@@ -508,9 +508,12 @@ void FillBinaryFile()
 }
 
 //Изменение размера файла
-static int lithiumdenis_truncate(const char * path, off_t offset) 
-{
-	return 0;
+static int lithiumdenis_truncate(const char * path, off_t newsize) 
+{       
+        int rt = 0;
+        node nd = searchByName(path);
+        rt = truncate(path, newsize);
+	return rt;
 }
 
 //Получение атрибутов файла
@@ -717,18 +720,19 @@ static int lithiumdenis_unlink(const char *path)
 //Вызывается, когда нет ссылок на открытый файл
 static int lithiumdenis_release(const char *path, struct fuse_file_info *fi)
 {
-	int rt;
+	int rt = 0;
 	int efile = fi->fh;
-        //fclose(efile);
+        printf("\nrelease(path = \"%s\", fi = 0x%08x)\n", path, fi);
+        rt = close(efile);
 	return 0;
 }
 
 //Делает возможным процесс кэширования
 static int lithiumdenis_flush(const char *path, struct fuse_file_info *fi)
 {
-	int rt;
-	int efile = fi->fh;
-	return 0;
+	int rt = 0;
+	printf("\nflush(path = \"%s\", file = 0x%08x)\n", path, fi);
+	return rt;
 }
 
 //Запись в файл
