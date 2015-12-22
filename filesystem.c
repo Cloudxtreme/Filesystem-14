@@ -446,14 +446,6 @@ unsigned long searchFreeInode()
     return pos - fs_info.inode_size;
 }
 
-int KnowSizeFile()
-{
-	FILE* fs = fopen(binary_path, "rb+");
-	fseek(fs, 0, SEEK_END);   
-	int size = ftell(fs);
-	return size; 	
-}
-
 void FillBinaryFile() 
 {
         //Заполняем файл нулями
@@ -464,37 +456,39 @@ void FillBinaryFile()
 		fprintf(f, "\n");
 	}
 	fclose(f);
-        
-        //Форматируем для работы с iNode
-	int size = KnowSizeFile();
-	FILE* fs = fopen(binary_path, "rb+"); 
-	fseek(fs, 0, SEEK_SET);
-        
-         fs_info.inode_size = sizeof(struct inode_s);
-         fs_info.inode_start = sizeof(struct fs_info_s);
-         fs_info.dev_size = size;
-         fs_info.data_node_size = sizeof(struct file_node_s);
-         fs_info.data_start = (unsigned long)(size * 0.05);
-        
-	fwrite(&fs_info, sizeof(struct fs_info_s), 1, fs);
-	
-        for (unsigned long i = fs_info.inode_start; i < fs_info.data_start; i+=fs_info.inode_size) 
-	{
-		fseek(fs, i, SEEK_SET);  
-		int x = 0;
-		fwrite(&x, 4, 1, fs);
-	}
-	int type = 1;
-	inode in = malloc(sizeof(struct inode_s));
-	in->type = type;
-	for (int i = 0; i < 10; i++) 
-	{
-		in->is_folder.nodes[i] = NULL;
-	}
-	fseek(fs, fs_info.inode_start, SEEK_SET);
-	fwrite(in, sizeof(struct inode_s), 1, fs);
 
-	fclose(fs);
+        //Форматируем для работы с iNode
+        FILE * sys = fileSystem();
+        int zero = NULL;
+        fpos_t pos;
+        fgetpos(sys, &pos);
+        fseek(sys,0,SEEK_END);   
+        int size = ftell(sys); 
+        fseek(sys, 0, SEEK_SET);
+        fs_info.inode_size = sizeof(struct inode_s);
+        fs_info.inode_start = sizeof(struct fs_info_s);
+        fs_info.dev_size = size;
+        fs_info.data_node_size = sizeof(struct file_node_s);
+        fs_info.data_start = (int)(size * 0.05);
+        fwrite(&fs_info, sizeof(struct fs_info_s), 1, sys);
+
+        float last = 0, old = 0;
+        for (int i = fs_info.inode_start; i < fs_info.data_start; i+=fs_info.inode_size) 
+        {
+            fseek(sys,i,SEEK_SET);  
+            fwrite(&zero, 4, 1, sys);
+        }
+        last = 0;
+        for (int i = fs_info.data_start; i < fs_info.dev_size; i+=fs_info.data_node_size) 
+        {
+            fseek(sys,i,SEEK_SET);
+            fwrite(&zero, 4, 1, sys);
+        }
+
+        inode ind = emptyInode(1);
+        node n = createNodeEmptyInode(ind, fs_info.inode_start);
+        saveNode(n);
+        fclose(sys);
 }
 
 //Изменение размера файла
@@ -727,9 +721,22 @@ static int lithiumdenis_flush(const char *path, struct fuse_file_info *fi)
 //Запись в файл
 static int lithiumdenis_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) 
 {
-    int rt = 0;
-    rt = pwrite(fi->fh, buf, size, offset);
-    return rt;
+    /*int index = fi->fh;
+    node nd = searchByName(index);
+    if (nd == NULL) 
+		return -ENOENT;
+    else
+    {
+        if(WriteFile(&n, (void *)buf, (long)offset, size) < 0)
+        {
+            return -EIO;
+        }
+        
+        if(WriteInode(index, n) < 0)
+            return -EIO;
+    }*/
+
+    return size;
 }
 
 static struct fuse_operations lithiumdenis_operations = {
