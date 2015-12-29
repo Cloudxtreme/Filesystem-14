@@ -1,5 +1,6 @@
 #define FUSE_USE_VERSION 26
 #define SIZE 4096
+#define _FILE_OFFSET_BITS 64
 
 #define DEBUG 
 #ifdef DEBUG
@@ -718,13 +719,144 @@ static int lithiumdenis_flush(const char *path, struct fuse_file_info *fi)
 	return rt;
 }
 
+node make_node_from_empty_inode(inode in, unsigned long index) {
+	if (index < 0) 
+            return NULL;
+	node head = malloc(sizeof(struct node_s));
+	head->index = index;
+	head->inode = in;
+	head->parent = NULL;
+	head->next = NULL;
+	for (int i = 0; i < 10; i++) {
+		head->childs[i] = NULL;
+	}
+	return head;
+}
+
+
 //Запись в файл
 static int lithiumdenis_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) 
 {
-    int rt = 0;
-    rt = pwrite(fi->fh, buf, size, offset);
-    return rt;
+	node file = searchByName(path);
+	node root = file;
+	int block_num, node_num;
+	int node_capacity = SIZE * 49;
+	node_num = offset / node_capacity;
+	offset -= node_num * node_capacity;
+	block_num = offset / SIZE;
+	offset -= block_num * SIZE;
+	int nind = node_num;
+	
+        while (nind > 0) 
+        {
+		//Для следующего inode
+		if (file -> next == NULL) 
+                {
+			//Создадим inode
+			inode in = emptyInode(2);
+			unsigned long pos = searchFreeInode();
+			if (pos < 0) 
+                            return 0;
+			node new_node = createNodeEmptyInode(in, pos);
+			file -> next = new_node;
+			file -> inode->next = pos;
+			saveNode(new_node);
+			saveNode(file);
+			block_num = 0;
+		} 
+		file = file -> next;
+		nind--;
+	}
+        
+        //Проверим, файл ли это
+	if (file -> inode -> type != 2) 
+        {
+		return -ENOENT;
+	}
+	
+	file_node n;
+	if (file -> inode -> is_file.data[block_num] == NULL) 
+        {
+		//Это новый файл
+		n = dataOfEmptyNode();
+		file -> inode -> is_file.data[block_num] = searchFreeDataNode();
+		if (file -> inode -> is_file.data[block_num] < 0) 
+                    return 0;
+		file -> inode -> is_file.used_count++;
+                //Место для записи найдено
+	} 
+        else 
+        {
+		//Не новый, просто загрузим
+		n = dataOfNode(file -> inode -> is_file.data[block_num]);
+	}
+	
+	if (n == NULL) 
+        {
+		//Не удалось загрузить
+		return 0;
+	}
 
+	size_t write_size = size;
+	size_t writted_size = 0;
+	size_t len = n -> size;
+	if (offset <= len) {
+		do 
+                {
+			//Производим запись
+			if (size > SIZE)
+				write_size = SIZE - offset;
+			memcpy(n->data + offset, buf + writted_size, write_size);
+			size -= write_size;
+			writted_size += write_size;
+			n -> size += write_size;
+			len = n -> size;
+			saveNode(file);
+			saveData(n, file->inode->is_file.data[block_num]);
+			if (len < SIZE - 1) 
+                        {
+				root -> inode -> is_file.total_size += writted_size;
+				saveNode(root);
+				return writted_size;
+			}
+			//Данные отправлены
+			if ((int)size > 0) 
+                        {
+				if (block_num < 48) 
+                                {
+					//Переходим к следующему блоку
+					block_num++;
+				} 
+                                else 
+                                {
+					//Переходим к следующему inode
+					inode in = emptyInode(2);
+					unsigned long pos = searchFreeInode();
+					if (pos < 0) 
+                                            return writted_size;
+					node new_node = createNodeEmptyInode(in, pos);
+					file -> next = new_node;
+					file -> inode -> next = pos;
+					saveNode(new_node);
+					saveNode(file);
+					file = new_node;
+					block_num = 0;
+				}
+				offset = 0;
+				n = dataOfEmptyNode();
+				file -> inode -> is_file.data[block_num] = searchFreeDataNode();
+				if (file -> inode -> is_file.data[block_num] < 0) 
+                                    return writted_size;
+				file -> inode -> is_file.used_count++;
+				
+			}
+		} while ((int)size > 0);
+	} 
+        else
+            writted_size = 0;
+	    root -> inode -> is_file.total_size += writted_size;
+	    saveNode(root);
+	    return writted_size;
 }
 
 static struct fuse_operations lithiumdenis_operations = {
