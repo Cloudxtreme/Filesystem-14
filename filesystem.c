@@ -27,7 +27,7 @@ typedef struct ifile_t
 {
 	int used_count;
 	int total_size;
-	unsigned long data[50];	
+	unsigned long data[49];	
 }iFile;
 
 typedef struct inode_s * inode;
@@ -628,68 +628,102 @@ static int lithiumdenis_create(const char *path, mode_t mode, struct fuse_file_i
 static int lithiumdenis_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *finfo) 
 {
 	node file = searchByName(path);
-        //Если не файл
-	if (file->inode->type != 2)
+        //А файл ли это
+	if (file -> inode -> type != 2) 
+        {
 		return -ENOENT;
+	}
 	int block_num, node_num;
-	int node_capacity = size * 50;
+	int node_capacity = SIZE * 49;
 	node_num = offset / node_capacity;
 	offset -= node_num * node_capacity;
-	block_num = offset / size;
-	offset -= block_num * size;
+	block_num = offset / SIZE;
+	offset -= block_num * SIZE;
 	int nind = node_num;
 	while (nind > 0) 
         {
-		if (file->next == NULL) return 0;
-		file = file->next;
+		if (file -> next == NULL) 
+                {
+			//Следующий null
+			return 0;
+		}
+		file = file -> next;
+		nind--;
 	}
-	if (file->inode->is_file.data[block_num] == NULL) 
+	
+	if (file -> inode -> is_file.data[block_num] == NULL) 
+        {
+		//Базовый не существует
 		return 0;
-	file_node nd = dataOfNode(file->inode->is_file.data[block_num]);
-	if (nd == NULL)
-                return 0;
-	if (nd->size == 0)
+	}
+	
+	file_node n = dataOfNode(file -> inode -> is_file.data[block_num]);
+	if (n == NULL) 
+        {
+		//Ошибка чтения
 		return 0;
+	}
 
+	if (n->size == 0) 
+        {
+		//Пустые данные
+		return 0;
+	}
+	
+        //В случае, если всё хорошо
 	size_t read_size = size;
 	size_t readed_size = 0;
-	size_t len = nd->size;
+	size_t len = n -> size;
 	if (offset < len) 
         {
-	    do 
-            {
-	        if (offset + size > len)
-		    read_size = len - offset;
-		    memcpy(buf + readed_size, nd->data + offset, read_size);
-		    size -= read_size;
-		    readed_size += read_size;
-		    if (len < size - 1) 
-                        return readed_size;
-		    if ((int)size > 0) 
-                    {
-		        if (block_num < 49) 
-			    block_num++;
-                        else 
+		do 
+                {
+			//Начинаем чтение
+			if (offset + size > len)
+				read_size = len - offset;
+			memcpy(buf + readed_size, n->data + offset, read_size);
+			size -= read_size;
+			readed_size += read_size;
+			if (len < SIZE - 1) return readed_size;
+			//Данные отправлены
+			if ((int)size > 0) 
                         {
-			    file = file->next;
-			    block_num = 0;
-			    if (file == NULL)
-			        return 0;
+				if (block_num < 48) 
+                                {
+					//Переходим к следующему блоку
+					block_num++;
+				} 
+                                else 
+                                {
+					//Переходим к следующему inode
+					file = file -> next;
+					block_num = 0;
+					if (file == NULL)
+						return readed_size;
+				}
+				offset = 0;
+				if (file->inode->is_file.data[block_num] == NULL) 
+                                {
+					//Дальнейшие данные не существуют
+					return readed_size;
+				}
+				n = dataOfNode(file->inode->is_file.data[block_num]);
+				if (n == NULL) 
+                                {
+					//Ошибка чтения
+					return readed_size;
+				}
+				if (n -> size == 0) 
+                                {
+					//Пустые данные
+					return readed_size;
+				}
 			}
-			offset = 0;
-			if (file->inode->is_file.data[block_num] == NULL) 
-			    return readed_size;
-			nd = dataOfNode(file->inode->is_file.data[block_num]);
-			if (nd == NULL) 
-			    return readed_size;
-			if (nd->size == 0) 
-			    return readed_size;
-		    }
 		} while ((int)size > 0);
 	} 
         else
 	    readed_size = 0;
-        return readed_size;
+	return readed_size;
 }
 
 //Удаление файла
@@ -718,21 +752,6 @@ static int lithiumdenis_flush(const char *path, struct fuse_file_info *fi)
 	printf("\nflush(path = \"%s\", file = 0x%08x)\n", path, fi);
 	return rt;
 }
-
-node make_node_from_empty_inode(inode in, unsigned long index) {
-	if (index < 0) 
-            return NULL;
-	node head = malloc(sizeof(struct node_s));
-	head->index = index;
-	head->inode = in;
-	head->parent = NULL;
-	head->next = NULL;
-	for (int i = 0; i < 10; i++) {
-		head->childs[i] = NULL;
-	}
-	return head;
-}
-
 
 //Запись в файл
 static int lithiumdenis_write(const char *path, const char *buf, size_t size, off_t offset, struct fuse_file_info *fi) 
@@ -854,9 +873,9 @@ static int lithiumdenis_write(const char *path, const char *buf, size_t size, of
 	} 
         else
             writted_size = 0;
-	    root -> inode -> is_file.total_size += writted_size;
-	    saveNode(root);
-	    return writted_size;
+	root -> inode -> is_file.total_size += writted_size;
+	saveNode(root);
+	return writted_size;
 }
 
 static struct fuse_operations lithiumdenis_operations = {
