@@ -451,7 +451,7 @@ void FillBinaryFile()
 {
         //Заполняем файл нулями
         FILE* f = fopen(binary_path, "wt");
-	for (int i = 0; i < 1000000; i++)
+	for (int i = 0; i < 80000000; i++)
 	{
 		fprintf(f, "%d\n", 0);
 		fprintf(f, "\n");
@@ -896,7 +896,16 @@ static struct fuse_operations lithiumdenis_operations = {
 
 int main(int argc, char *argv[])
 {
-        FillBinaryFile();
+        //Проверка наличия параметра - надо ли создавать новую ФС
+        if(argc > 2)
+        {
+            if(strstr(argv[2], "newfs"))
+            {
+                FillBinaryFile();
+            } 
+            argc = 2;
+        }
+
         loadFileSystem();
 	searchFreeInode();
 	return fuse_main(argc, argv, &lithiumdenis_operations, NULL);

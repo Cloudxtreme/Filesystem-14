@@ -4,3 +4,5 @@ mount:
 	./filesystem MyFilesystem/
 umount:
 	fusermount -u MyFilesystem
+mountnew:
+	./filesystem MyFilesystem/ newfs
